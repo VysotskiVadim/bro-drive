@@ -15,4 +15,4 @@ dependencyResolutionManagement {
 
 rootProject.name = "Bro drive"
 include(":app")
- 
+include(":bro-drive-app")
