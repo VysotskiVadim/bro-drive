@@ -3,6 +3,7 @@ package com.mapbox.hackathon.bro_drive_app.navigation
 import android.Manifest.permission.ACCESS_FINE_LOCATION
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.mapbox.hackathon.bro_drive_app.sync.LocationSync
 import com.mapbox.navigation.core.internal.extensions.flowLocationMatcherResult
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.core.trip.session.LocationMatcherResult
@@ -14,6 +15,7 @@ import kotlinx.coroutines.launch
 
 class NavigationViewModel : ViewModel() {
 
+    private val locationSync = LocationSync()
 
     private val mapboxNavigation = MapboxNavigationApp.current()!!
 
@@ -28,6 +30,9 @@ class NavigationViewModel : ViewModel() {
                     val firstLocation = _location.value == LocationState.Unknown
                     _location.value = LocationState.Known(firstLocation, it)
                 }
+        }
+        viewModelScope.launch {
+            locationSync.observerLocations().collect()
         }
     }
 

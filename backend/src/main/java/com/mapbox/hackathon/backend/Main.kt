@@ -16,7 +16,7 @@ import java.time.Duration
 import java.util.Collections
 
 fun main() {
-    embeddedServer(Netty, port = 8080) {
+    embeddedServer(Netty, port = 8080, host = "127.0.0.1") {
         install(WebSockets) {
             pingPeriod = Duration.ofSeconds(15)
             timeout = Duration.ofSeconds(15)
@@ -34,7 +34,7 @@ fun main() {
                     for (frame in incoming) {
                         frame as? Frame.Text ?: continue
                         val receivedText = frame.readText()
-                        //val textWithUsername = "[${thisConnection.name}]: $receivedText"
+                        println("received $receivedText")
                     }
                 } catch (e: Exception) {
                     println(e.localizedMessage)
