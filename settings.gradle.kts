@@ -29,3 +29,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "Bro drive"
 include(":bro-drive-app")
+include(":shared")
+include(":backend")
