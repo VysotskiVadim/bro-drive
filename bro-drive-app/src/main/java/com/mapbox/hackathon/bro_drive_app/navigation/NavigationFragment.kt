@@ -19,24 +19,23 @@ import com.mapbox.hackathon.bro_drive_app.R
 import com.mapbox.hackathon.bro_drive_app.databinding.FragmentNavigationBinding
 import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.ImageHolder
+import com.mapbox.maps.coroutine.awaitStyle
 import com.mapbox.maps.plugin.LocationPuck2D
 import com.mapbox.maps.plugin.animation.camera
-import com.mapbox.maps.plugin.annotation.AnnotationConfig
-import com.mapbox.maps.plugin.annotation.AnnotationType
 import com.mapbox.maps.plugin.annotation.annotations
-import com.mapbox.maps.plugin.annotation.generated.CircleAnnotation
 import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
-import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
 import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
+import com.mapbox.maps.plugin.gestures.gestures
 import com.mapbox.maps.plugin.locationcomponent.location
-import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.ui.maps.camera.NavigationCamera
 import com.mapbox.navigation.ui.maps.camera.data.MapboxNavigationViewportDataSource
 import com.mapbox.navigation.ui.maps.camera.lifecycle.NavigationBasicGesturesHandler
 import com.mapbox.navigation.ui.maps.camera.state.NavigationCameraState
-import com.mapbox.navigation.ui.maps.camera.transition.NavigationCameraTransition
-import com.mapbox.navigation.ui.maps.camera.transition.NavigationCameraTransitionOptions
 import com.mapbox.navigation.ui.maps.location.NavigationLocationProvider
+import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
+import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineView
+import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineViewOptions
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
@@ -65,6 +64,10 @@ class NavigationFragment : Fragment() {
         )
     }
 
+    // route line
+    private lateinit var routeLineAPI: MapboxRouteLineApi
+    private lateinit var routeLineView: MapboxRouteLineView
+
     // This property is only valid between onCreateView and
     // onDestroyView.
     private val binding get() = _binding!!
@@ -83,6 +86,15 @@ class NavigationFragment : Fragment() {
     override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
         super.onViewCreated(view, savedInstanceState)
 
+        binding.mapView.gestures.addOnMapLongClickListener { point ->
+            viewModel.mapLongClick(point)
+            true
+        }
+
+        routeLineView = MapboxRouteLineView(
+            MapboxRouteLineViewOptions.Builder(this.requireContext())
+                .build()
+        )
         viewportDataSource = MapboxNavigationViewportDataSource(
             binding.mapView.mapboxMap
         )
@@ -153,6 +165,19 @@ class NavigationFragment : Fragment() {
                     .withCircleStrokeWidth(2.0)
                     .withCircleStrokeColor("#ffffff")
                 manager.create(options)
+            }
+        }
+
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.routeLineRoutesUpdates.filterNotNull().collectLatest {
+                val style = binding.mapView.mapboxMap.awaitStyle()
+                routeLineView.renderRouteDrawData(style, it)
+            }
+        }
+        viewLifecycleOwner.lifecycleScope.launch {
+            viewModel.routeLineProgressUpdates.filterNotNull().collectLatest {
+                val style = binding.mapView.mapboxMap.awaitStyle()
+                routeLineView.renderRouteLineUpdate(style, it)
             }
         }
     }
