@@ -2,6 +2,7 @@ package com.mapbox.hackathon.bro_drive_app.navigation
 
 import android.Manifest
 import android.content.pm.PackageManager
+import android.content.res.Resources
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
@@ -12,12 +13,21 @@ import android.view.ViewGroup
 import androidx.core.app.ActivityCompat
 import androidx.fragment.app.viewModels
 import androidx.lifecycle.lifecycleScope
+import com.mapbox.geojson.Point
 import com.mapbox.hackathon.bro_drive_app.PermissionsHelper
 import com.mapbox.hackathon.bro_drive_app.R
 import com.mapbox.hackathon.bro_drive_app.databinding.FragmentNavigationBinding
+import com.mapbox.maps.EdgeInsets
 import com.mapbox.maps.ImageHolder
 import com.mapbox.maps.plugin.LocationPuck2D
 import com.mapbox.maps.plugin.animation.camera
+import com.mapbox.maps.plugin.annotation.AnnotationConfig
+import com.mapbox.maps.plugin.annotation.AnnotationType
+import com.mapbox.maps.plugin.annotation.annotations
+import com.mapbox.maps.plugin.annotation.generated.CircleAnnotation
+import com.mapbox.maps.plugin.annotation.generated.CircleAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.PointAnnotationOptions
+import com.mapbox.maps.plugin.annotation.generated.createCircleAnnotationManager
 import com.mapbox.maps.plugin.locationcomponent.location
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.ui.maps.camera.NavigationCamera
@@ -27,6 +37,7 @@ import com.mapbox.navigation.ui.maps.camera.state.NavigationCameraState
 import com.mapbox.navigation.ui.maps.camera.transition.NavigationCameraTransition
 import com.mapbox.navigation.ui.maps.camera.transition.NavigationCameraTransitionOptions
 import com.mapbox.navigation.ui.maps.location.NavigationLocationProvider
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 
 /**
@@ -41,6 +52,18 @@ class NavigationFragment : Fragment() {
     private lateinit var navigationCamera: NavigationCamera
     private lateinit var viewportDataSource: MapboxNavigationViewportDataSource
     private val navigationLocationProvider = NavigationLocationProvider()
+
+    private val pixelDensity = Resources.getSystem().displayMetrics.density
+
+
+    private val followingPadding: EdgeInsets by lazy {
+        EdgeInsets(
+            180.0 * pixelDensity,
+            40.0 * pixelDensity,
+            150.0 * pixelDensity,
+            40.0 * pixelDensity
+        )
+    }
 
     // This property is only valid between onCreateView and
     // onDestroyView.
@@ -63,6 +86,7 @@ class NavigationFragment : Fragment() {
         viewportDataSource = MapboxNavigationViewportDataSource(
             binding.mapView.mapboxMap
         )
+        viewportDataSource.followingPadding = followingPadding
         navigationCamera = NavigationCamera(
             binding.mapView.mapboxMap,
             binding.mapView.camera,
@@ -112,9 +136,23 @@ class NavigationFragment : Fragment() {
                 }
             }
         }
+        val manager = binding.mapView.annotations.createCircleAnnotationManager()
+
+
         viewLifecycleOwner.lifecycleScope.launch {
-            viewModel.broLocation.collect {
+            viewModel.broLocation.filterNotNull().collect {
                 Log.d("bro-location", it.toString())
+                manager.deleteAll()
+                val options = CircleAnnotationOptions()
+                    .withPoint(Point.fromLngLat(
+                        /* longitude = */ it.location.longitude,
+                        /* latitude = */ it.location.latitude
+                    ))
+                    .withCircleRadius(8.0)
+                    .withCircleColor("#ee4e8b")
+                    .withCircleStrokeWidth(2.0)
+                    .withCircleStrokeColor("#ffffff")
+                manager.create(options)
             }
         }
     }
