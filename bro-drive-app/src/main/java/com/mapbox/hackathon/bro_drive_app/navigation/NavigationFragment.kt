@@ -65,7 +65,6 @@ class NavigationFragment : Fragment() {
     }
 
     // route line
-    private lateinit var routeLineAPI: MapboxRouteLineApi
     private lateinit var routeLineView: MapboxRouteLineView
 
     // This property is only valid between onCreateView and
@@ -179,6 +178,16 @@ class NavigationFragment : Fragment() {
                 val style = binding.mapView.mapboxMap.awaitStyle()
                 routeLineView.renderRouteLineUpdate(style, it)
             }
+        }
+
+        navigationCamera.registerNavigationCameraStateChangeObserver {
+            when (it) {
+                NavigationCameraState.TRANSITION_TO_FOLLOWING, NavigationCameraState.FOLLOWING -> binding.followFab.hide()
+                else -> binding.followFab.show()
+            }
+        }
+        binding.followFab.setOnClickListener {
+            navigationCamera.requestNavigationCameraToFollowing()
         }
     }
 
