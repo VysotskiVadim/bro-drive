@@ -39,6 +39,9 @@ android {
 }
 
 dependencies {
+    implementation(project(":shared"))
+
+
     val lifecycle_version = "2.7.0"
 
     // ViewModel
@@ -50,6 +53,7 @@ dependencies {
     implementation("io.ktor:ktor-client-core:2.3.9")
     implementation("io.ktor:ktor-client-cio:2.3.9")
     implementation("io.ktor:ktor-client-websockets:2.3.9")
+    implementation("io.ktor:ktor-serialization-kotlinx-json")
 
     implementation("androidx.core:core-ktx:1.12.0")
     implementation("androidx.appcompat:appcompat:1.6.1")
