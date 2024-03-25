@@ -1,7 +1,7 @@
 package com.mapbox.hackathon.backend
 
+import com.mapbox.hackathon.shared.BroUpdate
 import com.mapbox.hackathon.shared.IdMessage
-import com.mapbox.hackathon.shared.SharedUserLocation
 import io.ktor.serialization.kotlinx.KotlinxWebsocketSerializationConverter
 import io.ktor.server.application.call
 import io.ktor.server.application.install
@@ -29,7 +29,7 @@ fun main() {
             pingPeriod = Duration.ofSeconds(5)
             timeout = Duration.ofSeconds(30)
         }
-        val allLocations = MutableSharedFlow<SharedUserLocation>(extraBufferCapacity = 500)
+        val allUpdates = MutableSharedFlow<BroUpdate>(extraBufferCapacity = 500)
         routing {
             get("/") {
                 call.respondText("Hello, world!")
@@ -37,20 +37,20 @@ fun main() {
             webSocket("/locations") {
                 try {
                     val idMessage = receiveDeserialized<IdMessage>()
-                    println("connect with ${idMessage.userId}")
+                    println("connected with ${idMessage.userId}")
                     launch {
-                        allLocations
+                        allUpdates
                             .filter { it.userId != idMessage.userId }
                             .collect {
-                                println("Broadcasting location from ${it.userId} to ${idMessage.userId}")
+                                println("Broadcasting update from ${it.userId} to ${idMessage.userId}")
                                 sendSerialized(it)
                             }
                     }
 
                     while (true) {
-                        val location = receiveDeserialized<SharedUserLocation>()
-                        println("received location from ${location.userId}")
-                        allLocations.emit(location)
+                        val update = receiveDeserialized<BroUpdate>()
+                        println("received update from ${update.userId}")
+                        allUpdates.emit(update)
                     }
                 } catch (e: Exception) {
                     println("Error: ${e.message}")

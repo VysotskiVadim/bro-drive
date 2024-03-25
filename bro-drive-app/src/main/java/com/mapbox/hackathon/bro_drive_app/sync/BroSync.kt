@@ -2,9 +2,11 @@ package com.mapbox.hackathon.bro_drive_app.sync
 
 import android.util.Log
 import com.mapbox.common.location.Location
+import com.mapbox.hackathon.shared.BroUpdate
 import com.mapbox.hackathon.shared.IdMessage
 import com.mapbox.hackathon.shared.SharedLocation
-import com.mapbox.hackathon.shared.SharedUserLocation
+import com.mapbox.navigation.base.internal.route.serialize
+import com.mapbox.navigation.base.route.NavigationRoute
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.websocket.WebSockets
 import io.ktor.client.plugins.websocket.receiveDeserialized
@@ -22,11 +24,13 @@ import kotlinx.coroutines.launch
 import kotlinx.serialization.json.Json
 import java.util.UUID
 
-class LocationSync {
+class BroSync {
 
     private val userId = UUID.randomUUID().toString()
 
     private val myLocation = MutableStateFlow<SharedLocation?>(null)
+
+    private val myRoute = MutableStateFlow<NavigationRoute?>(null)
 
     suspend fun updateMyLocation(location: Location) {
         myLocation.emit(
@@ -38,7 +42,13 @@ class LocationSync {
         )
     }
 
-    fun observerLocations(): Flow<SharedUserLocation> = flow {
+    suspend fun updateMyRoute(route: NavigationRoute?) {
+        myRoute.emit(
+            route
+        )
+    }
+
+    fun observerLocations(): Flow<BroUpdate> = flow {
         val client = HttpClient {
             install(WebSockets) {
                 contentConverter = KotlinxWebsocketSerializationConverter(Json)
@@ -55,12 +65,33 @@ class LocationSync {
                     sendSerialized(IdMessage(userId))
                     launch {
                         myLocation.filterNotNull().collect {
-                            sendSerialized(SharedUserLocation(userId, it))
+                            sendSerialized<BroUpdate>(
+                                BroUpdate.LocationUpdate(
+                                    userId,
+                                    it
+                                )
+                            )
+                        }
+                    }
+                    launch {
+                        myRoute.collect {
+                            if (it != null) {
+                                sendSerialized<BroUpdate>(
+                                    BroUpdate.RouteSet(
+                                        userId,
+                                        it.serialize()
+                                    )
+                                )
+                            } else {
+                                sendSerialized<BroUpdate>(
+                                    BroUpdate.RouteCleared(userId)
+                                )
+                            }
                         }
                     }
                     while (true) {
-                        val sharedLocation = receiveDeserialized<SharedUserLocation>()
-                        this@flow.emit(sharedLocation)
+                        val update = receiveDeserialized<BroUpdate>()
+                        this@flow.emit(update)
                     }
                 }
             } catch (ce: CancellationException) {

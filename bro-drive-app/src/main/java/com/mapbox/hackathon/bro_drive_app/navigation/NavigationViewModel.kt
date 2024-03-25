@@ -7,14 +7,17 @@ import androidx.lifecycle.viewModelScope
 import com.mapbox.api.directions.v5.models.Bearing
 import com.mapbox.api.directions.v5.models.RouteOptions
 import com.mapbox.geojson.Point
-import com.mapbox.hackathon.bro_drive_app.sync.LocationSync
-import com.mapbox.hackathon.shared.SharedUserLocation
+import com.mapbox.hackathon.bro_drive_app.sync.BroSync
+import com.mapbox.hackathon.shared.BroUpdate
+import com.mapbox.hackathon.shared.SharedLocation
 import com.mapbox.navigation.base.extensions.applyDefaultNavigationOptions
+import com.mapbox.navigation.base.internal.route.deserializeNavigationRouteFrom
 import com.mapbox.navigation.core.internal.extensions.flowLocationMatcherResult
 import com.mapbox.navigation.core.lifecycle.MapboxNavigationApp
 import com.mapbox.navigation.core.trip.session.LocationMatcherResult
 import com.mapbox.navigation.ui.maps.route.line.api.MapboxRouteLineApi
 import com.mapbox.navigation.ui.maps.route.line.model.MapboxRouteLineApiOptions
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -22,12 +25,13 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.coroutines.resume
 import kotlin.coroutines.suspendCoroutine
 
 class NavigationViewModel : ViewModel() {
 
-    private val locationSync = LocationSync()
+    private val broSync = BroSync()
 
     private val mapboxNavigation = MapboxNavigationApp.current()!!
 
@@ -36,8 +40,8 @@ class NavigationViewModel : ViewModel() {
     private val _location = MutableStateFlow<LocationState>(LocationState.Unknown)
     val location: StateFlow<LocationState> = _location
 
-    private val _broLocation = MutableStateFlow<SharedUserLocation?>(null)
-    val broLocation: StateFlow<SharedUserLocation?> = _broLocation
+    private val _broLocation = MutableStateFlow<SharedLocation?>(null)
+    val broLocation: StateFlow<SharedLocation?> = _broLocation
 
     val routeLineRoutesUpdates = mapboxNavigation.routesUpdates()
         .map {
@@ -65,7 +69,7 @@ class NavigationViewModel : ViewModel() {
         viewModelScope.launch {
             mapboxNavigation.flowLocationMatcherResult()
                 .onEach {
-                    locationSync.updateMyLocation(it.enhancedLocation)
+                    broSync.updateMyLocation(it.enhancedLocation)
                 }
                 .collect {
                     val firstLocation = _location.value == LocationState.Unknown
@@ -73,8 +77,21 @@ class NavigationViewModel : ViewModel() {
                 }
         }
         viewModelScope.launch {
-            locationSync.observerLocations().collect {
-                _broLocation.emit(it)
+            broSync.observerLocations().collect {
+                when (it) {
+                    is BroUpdate.LocationUpdate -> _broLocation.emit(it.userLocation)
+                    is BroUpdate.RouteCleared -> mapboxNavigation.setNavigationRoutes(emptyList())
+                    is BroUpdate.RouteSet -> {
+                        withContext(Dispatchers.Main) {
+                            deserializeNavigationRouteFrom(it.serializedNavigationRoute)
+                        }.onValue{
+                            mapboxNavigation.setNavigationRoutes(listOf(it))
+                        }.onError {
+                            Log.e("route-sync", "error parsing route", it)
+                        }
+                    }
+                }
+
             }
         }
     }
@@ -114,7 +131,11 @@ class NavigationViewModel : ViewModel() {
                 is RouteRequestResult.Failure -> {
                     Log.e("route request", "route request failure: ${result.reasons}")
                 }
-                is RouteRequestResult.Success -> mapboxNavigation.setNavigationRoutes(result.routes)
+                is RouteRequestResult.Success -> {
+                    mapboxNavigation.setNavigationRoutesAsync(result.routes).value?.let {
+                        broSync.updateMyRoute(result.routes.first())
+                    }
+                }
             }
         }
     }

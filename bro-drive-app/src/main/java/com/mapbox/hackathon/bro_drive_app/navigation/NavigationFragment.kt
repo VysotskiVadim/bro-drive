@@ -156,8 +156,8 @@ class NavigationFragment : Fragment() {
                 manager.deleteAll()
                 val options = CircleAnnotationOptions()
                     .withPoint(Point.fromLngLat(
-                        /* longitude = */ it.location.longitude,
-                        /* latitude = */ it.location.latitude
+                        /* longitude = */ it.longitude,
+                        /* latitude = */ it.latitude
                     ))
                     .withCircleRadius(8.0)
                     .withCircleColor("#ee4e8b")
