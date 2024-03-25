@@ -84,7 +84,7 @@ class NavigationViewModel : ViewModel() {
                     is BroUpdate.RouteSet -> {
                         withContext(Dispatchers.Main) {
                             deserializeNavigationRouteFrom(it.serializedNavigationRoute)
-                        }.onValue{
+                        }.onValue {
                             mapboxNavigation.setNavigationRoutes(listOf(it))
                         }.onError {
                             Log.e("route-sync", "error parsing route", it)
@@ -103,27 +103,48 @@ class NavigationViewModel : ViewModel() {
 
     fun mapLongClick(point: Point) {
         val currentLocation = (location.value as? LocationState.Known)?.value ?: return
+        val broLocation = _broLocation.value
         viewModelScope.launch {
             val result = mapboxNavigation.requestRoutes(
                 RouteOptions.builder()
                     .applyDefaultNavigationOptions()
                     .coordinatesList(
-                        listOf(
+                        mutableListOf(
                             Point.fromLngLat(
                                 currentLocation.enhancedLocation.longitude,
                                 currentLocation.enhancedLocation.latitude,
                             ),
                             point
-                        )
+                        ).apply {
+                            if (broLocation != null) {
+                                add(
+                                    1,
+                                    Point.fromLngLat(
+                                        broLocation.longitude,
+                                        broLocation.latitude
+                                    )
+                                )
+                            }
+                        }
                     )
                     .bearingsList(
-                        listOf(
+                        mutableListOf(
                             Bearing.builder()
                                 .angle(currentLocation.enhancedLocation.bearing ?: 0.0)
                                 .degrees(45.0)
                                 .build(),
                             null
-                        )
+                        ).apply {
+                            if (broLocation != null) {
+                                add(
+                                    1,
+                                    Bearing.builder()
+                                        .angle(broLocation.bearing)
+                                        .degrees(45.0)
+                                        .build()
+                                )
+                            }
+                        }
                     )
                     .build()
             )
@@ -131,6 +152,7 @@ class NavigationViewModel : ViewModel() {
                 is RouteRequestResult.Failure -> {
                     Log.e("route request", "route request failure: ${result.reasons}")
                 }
+
                 is RouteRequestResult.Success -> {
                     mapboxNavigation.setNavigationRoutesAsync(result.routes).value?.let {
                         broSync.updateMyRoute(result.routes.first())
